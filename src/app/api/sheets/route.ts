@@ -81,7 +81,12 @@ export async function GET() {
       const g = (idx: number) => (r[idx] || "").trim();
       const m = (idx: number) => parseMoney(r[idx] || "");
       const fechaRaw = g(V.fechaSol);
-      const fechaDate = fechaRaw ? new Date(fechaRaw.includes("/") ? fechaRaw.split("/").reverse().join("-") : fechaRaw) : null;
+      let fechaDate: Date | null = null;
+      if (fechaRaw) {
+        const p = fechaRaw.split("/");
+        if (p.length === 3) fechaDate = new Date(p[2] + "-" + p[0] + "-" + p[1]);
+        else fechaDate = new Date(fechaRaw);
+      }
       const ano = fechaDate && !isNaN(fechaDate.getTime()) ? fechaDate.getFullYear() : null;
       return {
         fechaSolicitud: fechaRaw,
@@ -119,7 +124,12 @@ export async function GET() {
       const m = (idx: number) => parseMoney(r[idx] || "");
       const n = (idx: number) => parseInt(r[idx] || "0") || 0;
       const fechaRaw = g(F.fechaEmision);
-      const fechaDate = fechaRaw ? new Date(fechaRaw.includes("/") ? fechaRaw.split("/").reverse().join("-") : fechaRaw) : null;
+      let fechaDate: Date | null = null;
+      if (fechaRaw) {
+        const p = fechaRaw.split("/");
+        if (p.length === 3) fechaDate = new Date(p[2] + "-" + p[0] + "-" + p[1]);
+        else fechaDate = new Date(fechaRaw);
+      }
       const ano = fechaDate && !isNaN(fechaDate.getTime()) ? fechaDate.getFullYear() : null;
       return {
         placa: g(F.placa),
