@@ -257,12 +257,16 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      <header className="sticky top-0 z-50 bg-white border-b shadow-sm">
+    <div className="min-h-screen bg-gray-50/50 relative overflow-hidden">
+      {/* Watermark */}
+      <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center">
+        <img src="https://i.postimg.cc/Kjkfd3cL/logo-(2).png" alt="" className="w-[600px] h-[600px] md:w-[800px] md:h-[800px] object-contain opacity-[0.03] select-none" />
+      </div>
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b shadow-sm">
         <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-emerald-600 flex items-center justify-center"><Shield className="h-5 w-5 text-white" /></div>
-            <div><h1 className="text-base md:text-lg font-bold tracking-tight">ChevyPlan Dashboard</h1><p className="text-xs text-muted-foreground hidden sm:block">Seguros Automotrices en Tiempo Real</p></div>
+            <img src="https://i.postimg.cc/Kjkfd3cL/logo-(2).png" alt="ChevyPlan" className="h-9 w-9 object-contain rounded" />
+            <div><h1 className="text-base md:text-lg font-bold tracking-tight">INFORME ESTRATEGIA DIGITAL</h1><p className="text-xs text-muted-foreground hidden sm:block">Seguros Automotrices en Tiempo Real</p></div>
           </div>
           <div className="flex items-center gap-3">
             {lastRefresh && <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /><span>{lastRefresh.toLocaleTimeString("es-CO")}</span><Badge variant="secondary" className="ml-1 font-mono text-[10px]">{countdown}s</Badge></div>}
@@ -271,7 +275,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto p-4 md:p-6 space-y-5">
+      <main className="relative z-10 max-w-[1600px] mx-auto p-4 md:p-6 space-y-5">
         <Tabs defaultValue="ventas" className="w-full">
           <TabsList className="grid w-full grid-cols-2 max-w-md">
             <TabsTrigger value="ventas" className="gap-1.5"><BarChart3 className="h-4 w-4" />Ventas</TabsTrigger>
@@ -484,7 +488,7 @@ export default function DashboardPage() {
             </CardContent></Card>
           </TabsContent>
         </Tabs>
-        <footer className="mt-6 pb-4 text-center text-xs text-muted-foreground">Datos actualizados cada 60s desde Google Sheets &middot; ChevyPlan Dashboard</footer>
+        <footer className="mt-6 pb-4 text-center text-xs text-muted-foreground">Datos actualizados cada 60s desde Google Sheets &middot; INFORME ESTRATEGIA DIGITAL</footer>
       </main>
     </div>
   );
