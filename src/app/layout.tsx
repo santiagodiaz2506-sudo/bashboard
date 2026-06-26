@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: "INFORME ESTRATEGIA DIGITAL - ChevyPlan",
   description: "Informe en tiempo real para gestión de seguros automotrices ChevyPlan",
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
   },
 };
 
