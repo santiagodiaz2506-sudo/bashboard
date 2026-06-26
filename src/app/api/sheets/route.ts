@@ -80,8 +80,13 @@ export async function GET() {
     const ventas = ventasRaw.slice(1).map((r) => {
       const g = (idx: number) => (r[idx] || "").trim();
       const m = (idx: number) => parseMoney(r[idx] || "");
+      const fechaRaw = g(V.fechaSol);
+      const fechaDate = fechaRaw ? new Date(fechaRaw.includes("/") ? fechaRaw.split("/").reverse().join("-") : fechaRaw) : null;
+      const ano = fechaDate && !isNaN(fechaDate.getTime()) ? fechaDate.getFullYear() : null;
       return {
-        fechaSolicitud: g(V.fechaSol),
+        fechaSolicitud: fechaRaw,
+        fechaDate: fechaDate ? fechaDate.toISOString() : null,
+        ano,
         poliza: g(V.poliza),
         placa: g(V.placa),
         estrategia: g(V.estrategia),
@@ -113,8 +118,14 @@ export async function GET() {
       const g = (idx: number) => (r[idx] || "").trim();
       const m = (idx: number) => parseMoney(r[idx] || "");
       const n = (idx: number) => parseInt(r[idx] || "0") || 0;
+      const fechaRaw = g(F.fechaEmision);
+      const fechaDate = fechaRaw ? new Date(fechaRaw.includes("/") ? fechaRaw.split("/").reverse().join("-") : fechaRaw) : null;
+      const ano = fechaDate && !isNaN(fechaDate.getTime()) ? fechaDate.getFullYear() : null;
       return {
         placa: g(F.placa),
+        fechaEmision: fechaRaw,
+        fechaDate: fechaDate ? fechaDate.toISOString() : null,
+        ano,
         mes: g(F.mes),
         estrategia: g(F.estrategia),
         ccs: g(F.ccs),
@@ -156,6 +167,8 @@ export async function GET() {
     // Extract filter options
     const mesesVentas = [...new Set(ventas.map((v) => v.mes).filter(Boolean))];
     const mesesFid = [...new Set(fidelizacion.map((f) => f.mes).filter(Boolean))];
+    const anosVentas = [...new Set(ventas.map((v) => v.ano).filter((a): a is number => a !== null))].sort();
+    const anosFid = [...new Set(fidelizacion.map((f) => f.ano).filter((a): a is number => a !== null))].sort();
     const estrategias = [...new Set(fidelizacion.map((f) => f.estrategia).filter(Boolean))];
     const asesoras = [...new Set(fidelizacion.map((f) => f.asesora).filter(Boolean))].sort();
     const segmentos = [...new Set(fidelizacion.map((f) => f.segmento).filter(Boolean))].sort();
@@ -174,6 +187,8 @@ export async function GET() {
           const mo = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
           return mo.indexOf(a) - mo.indexOf(b);
         }),
+        anosVentas,
+        anosFid,
         estrategias,
         asesoras,
         segmentos,

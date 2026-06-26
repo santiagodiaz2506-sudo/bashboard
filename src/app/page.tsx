@@ -28,6 +28,7 @@ interface Venta {
   porcComision: number; valorComision: number; comisionCCS: number; comisionAAA: number;
   vigente: boolean; mes: string; mesEstrategia: string;
   formaPago: string; financiera: string; fechaSolicitud: string;
+  fechaDate: string | null; ano: number | null;
 }
 
 interface FidRow {
@@ -42,6 +43,7 @@ interface FidRow {
   llamadasWecall: number; whatsappTotal: number; whatsappLucia: number;
   whatsappAgente: number; comisionIngresoAAA: number; canalIngreso: string;
   fechaEmision: string; mesEmision: string;
+  fechaDate: string | null; ano: number | null;
 }
 
 interface SheetData {
@@ -51,6 +53,7 @@ interface SheetData {
   filtros: {
     mesesVentas: string[]; mesesFid: string[]; estrategias: string[];
     asesoras: string[]; segmentos: string[]; comerciales: string[];
+    anosVentas: number[]; anosFid: number[];
   };
 }
 
@@ -81,7 +84,7 @@ function KPICard({ title, value, sub, icon: Icon, color = "text-primary" }: {
   title: string; value: string; sub?: string; icon: React.ComponentType<{ className?: string }>; color?: string;
 }) {
   return (
-    <Card className="relative overflow-hidden">
+    <Card className="relative overflow-hidden bg-white/70">
       <CardContent className="p-4 md:p-5">
         <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5 min-w-0 flex-1">
@@ -103,12 +106,50 @@ function FiltSel({ label, value, onChange, opts }: { label: string; value: strin
     <div className="space-y-1">
       <label className="text-[10px] md:text-xs font-medium text-muted-foreground">{label}</label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full md:w-[170px] h-8 text-xs"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="w-full md:w-[150px] h-8 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="__all__">Todos</SelectItem>
           {opts.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+function DateFilter({ mode, setMode, ano, setAno, mes, setMes, desde, setDesde, hasta, setHasta, anosOpts, mesesOpts }: {
+  mode: "mes" | "rango"; setMode: (m: "mes" | "rango") => void;
+  ano: string; setAno: (v: string) => void;
+  mes: string; setMes: (v: string) => void;
+  desde: string; setDesde: (v: string) => void;
+  hasta: string; setHasta: (v: string) => void;
+  anosOpts: { value: string; label: string }[];
+  mesesOpts: { value: string; label: string }[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-3">
+      <div className="space-y-1">
+        <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Filtro</label>
+        <Select value={mode} onValueChange={(v) => setMode(v as "mes" | "rango")}>
+          <SelectTrigger className="w-full md:w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mes">Por Mes</SelectItem>
+            <SelectItem value="rango">Por Rango</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {mode === "mes" ? (<>
+        <FiltSel label="Año" value={ano} onChange={setAno} opts={anosOpts} />
+        <FiltSel label="Mes" value={mes} onChange={setMes} opts={mesesOpts} />
+      </>) : (<>
+        <div className="space-y-1">
+          <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Desde</label>
+          <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full md:w-[160px] h-8 text-xs border rounded-md px-2 bg-white/50" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Hasta</label>
+          <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full md:w-[160px] h-8 text-xs border rounded-md px-2 bg-white/50" />
+        </div>
+      </>)}
     </div>
   );
 }
@@ -156,9 +197,19 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState(60);
+  // Ventas filters
+  const [fModoV, setFModoV] = useState<"mes" | "rango">("mes");
+  const [fAnoV, setFAnoV] = useState("__all__");
   const [fMesV, setFMesV] = useState("__all__");
+  const [fDesdeV, setFDesdeV] = useState("");
+  const [fHastaV, setFHastaV] = useState("");
   const [fComercial, setFComercial] = useState("__all__");
+  // Fidelización filters
+  const [fModoF, setFModoF] = useState<"mes" | "rango">("mes");
+  const [fAnoF, setFAnoF] = useState("__all__");
   const [fMesF, setFMesF] = useState("__all__");
+  const [fDesdeF, setFDesdeF] = useState("");
+  const [fHastaF, setFHastaF] = useState("");
   const [fEstrategia, setFEstrategia] = useState("__all__");
   const [fAsesora, setFAsesora] = useState("__all__");
   const [fSegmento, setFSegmento] = useState("__all__");
@@ -176,8 +227,24 @@ export default function DashboardPage() {
   useEffect(() => { fetchData(); const iv = setInterval(fetchData, 60_000); return () => clearInterval(iv); }, [fetchData]);
   useEffect(() => { if (countdown <= 0) return; const t = setInterval(() => setCountdown((c) => c - 1), 1000); return () => clearInterval(t); }, [countdown]);
 
-  const vF = useMemo(() => { if (!data) return []; return data.ventas.filter((r) => (fMesV === "__all__" || r.mes === fMesV) && (fComercial === "__all__" || r.comercial === fComercial)); }, [data, fMesV, fComercial]);
-  const fF = useMemo(() => { if (!data) return []; return data.fidelizacion.filter((r) => (fMesF === "__all__" || r.mes === fMesF) && (fEstrategia === "__all__" || r.estrategia === fEstrategia) && (fAsesora === "__all__" || r.asesora === fAsesora) && (fSegmento === "__all__" || r.segmento === fSegmento)); }, [data, fMesF, fEstrategia, fAsesora, fSegmento]);
+  // Filter helpers
+  const matchDateFilter = useCallback((item: { fechaDate: string | null; ano: number | null; mes: string }, mode: "mes" | "rango", ano: string, mes: string, desde: string, hasta: string) => {
+    if (mode === "mes") {
+      const anoOk = ano === "__all__" || (item.ano !== null && String(item.ano) === ano);
+      const mesOk = mes === "__all__" || item.mes.toLowerCase() === mes.toLowerCase();
+      return anoOk && mesOk;
+    } else {
+      if (!desde && !hasta) return true;
+      if (!item.fechaDate) return false;
+      const d = new Date(item.fechaDate);
+      if (desde && d < new Date(desde)) return false;
+      if (hasta) { const h = new Date(hasta); h.setHours(23, 59, 59, 999); if (d > h) return false; }
+      return true;
+    }
+  }, []);
+
+  const vF = useMemo(() => { if (!data) return []; return data.ventas.filter((r) => matchDateFilter(r, fModoV, fAnoV, fMesV, fDesdeV, fHastaV) && (fComercial === "__all__" || r.comercial === fComercial)); }, [data, fModoV, fAnoV, fMesV, fDesdeV, fHastaV, fComercial, matchDateFilter]);
+  const fF = useMemo(() => { if (!data) return []; return data.fidelizacion.filter((r) => matchDateFilter(r, fModoF, fAnoF, fMesF, fDesdeF, fHastaF) && (fEstrategia === "__all__" || r.estrategia === fEstrategia) && (fAsesora === "__all__" || r.asesora === fAsesora) && (fSegmento === "__all__" || r.segmento === fSegmento)); }, [data, fModoF, fAnoF, fMesF, fDesdeF, fHastaF, fEstrategia, fAsesora, fSegmento, matchDateFilter]);
 
   // VENTAS KPIs
   const vK = useMemo(() => {
@@ -260,7 +327,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50/50 relative overflow-hidden">
       {/* Watermark */}
       <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center">
-        <img src="https://i.postimg.cc/Kjkfd3cL/logo-(2).png" alt="" className="w-[600px] h-[600px] md:w-[800px] md:h-[800px] object-contain opacity-[0.03] select-none" />
+        <img src="https://i.postimg.cc/Kjkfd3cL/logo-(2).png" alt="" className="w-[600px] h-[600px] md:w-[900px] md:h-[900px] object-contain opacity-[0.07] select-none" />
       </div>
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b shadow-sm">
         <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
@@ -284,11 +351,11 @@ export default function DashboardPage() {
 
           {/* ========== VENTAS ========== */}
           <TabsContent value="ventas" className="space-y-5 mt-5">
-            <Card className="border-dashed">
+            <Card className="border-dashed bg-white/60">
               <CardContent className="p-3 md:p-4">
                 <div className="flex items-center gap-2 mb-3"><Filter className="h-4 w-4 text-muted-foreground" /><span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtros</span></div>
                 <div className="flex flex-wrap gap-3">
-                  <FiltSel label="Mes" value={fMesV} onChange={setFMesV} opts={fo.mesesVentas.map((m) => ({ value: m, label: fmtM(m) }))} />
+                  <DateFilter mode={fModoV} setMode={setFModoV} ano={fAnoV} setAno={setFAnoV} mes={fMesV} setMes={setFMesV} desde={fDesdeV} setDesde={setFDesdeV} hasta={fHastaV} setHasta={setFHastaV} anosOpts={fo.anosVentas.map((a) => ({ value: String(a), label: String(a) }))} mesesOpts={fo.mesesVentas.map((m) => ({ value: m, label: fmtM(m) }))} />
                   <FiltSel label="Comercial" value={fComercial} onChange={setFComercial} opts={fo.comerciales.map((c) => ({ value: c, label: c }))} />
                 </div>
               </CardContent>
@@ -307,7 +374,7 @@ export default function DashboardPage() {
 
             {/* Pólizas + Prima por Mes */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Pólizas por Mes</CardTitle></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Pólizas por Mes</CardTitle></CardHeader><CardContent>
                 <ChartContainer config={cntCfg} className="h-[280px] w-full">
                   <BarChart data={vMes} margin={{ left: 0, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -317,7 +384,7 @@ export default function DashboardPage() {
                   </BarChart>
                 </ChartContainer>
               </CardContent></Card>
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Prima Neta por Mes</CardTitle></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Prima Neta por Mes</CardTitle></CardHeader><CardContent>
                 <ChartContainer config={primaCfg} className="h-[280px] w-full">
                   <BarChart data={vMes} margin={{ left: 0, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -332,8 +399,8 @@ export default function DashboardPage() {
 
             {/* Aseguradora + Comercial */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Distribución por Aseguradora</CardTitle></CardHeader><CardContent><HBar data={vAseg} h={320} wName={100} /></CardContent></Card>
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Top Comerciales por Prima</CardTitle></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Distribución por Aseguradora</CardTitle></CardHeader><CardContent><HBar data={vAseg} h={320} wName={100} /></CardContent></Card>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Top Comerciales por Prima</CardTitle></CardHeader><CardContent>
                 <ChartContainer config={primaCfg} className="h-[320px] w-full">
                   <BarChart data={vCom} layout="vertical" margin={{ left: 0, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
@@ -348,13 +415,13 @@ export default function DashboardPage() {
 
             {/* Marcas + Líneas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Top Marcas</CardTitle></CardHeader><CardContent><Donut data={vMarca} /></CardContent></Card>
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Top Líneas de Vehículo</CardTitle></CardHeader><CardContent><HBar data={vLinea} h={280} wName={130} /></CardContent></Card>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Top Marcas</CardTitle></CardHeader><CardContent><Donut data={vMarca} /></CardContent></Card>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Top Líneas de Vehículo</CardTitle></CardHeader><CardContent><HBar data={vLinea} h={280} wName={130} /></CardContent></Card>
             </div>
 
             {/* Modelo Año + Concesionario */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Distribución por Modelo (Año)</CardTitle></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Distribución por Modelo (Año)</CardTitle></CardHeader><CardContent>
                 <ChartContainer config={cntCfg} className="h-[250px] w-full">
                   <BarChart data={vAno} margin={{ left: 0, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -364,12 +431,12 @@ export default function DashboardPage() {
                   </BarChart>
                 </ChartContainer>
               </CardContent></Card>
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Top Concesionarios</CardTitle></CardHeader><CardContent><HBar data={vConc} h={250} wName={120} /></CardContent></Card>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Top Concesionarios</CardTitle></CardHeader><CardContent><HBar data={vConc} h={250} wName={120} /></CardContent></Card>
             </div>
 
             {/* Forma Pago + Financiera */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Forma de Pago</CardTitle></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Forma de Pago</CardTitle></CardHeader><CardContent>
                 <ChartContainer config={barCfg} className="h-[250px] w-full">
                   <PieChart>
                     <Pie data={vFP} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, percent }) => name + " " + (percent * 100).toFixed(0) + "%"} labelLine={false}>
@@ -379,17 +446,17 @@ export default function DashboardPage() {
                   </PieChart>
                 </ChartContainer>
               </CardContent></Card>
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Financieras</CardTitle></CardHeader><CardContent><HBar data={vFin} h={250} wName={100} /></CardContent></Card>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Financieras</CardTitle></CardHeader><CardContent><HBar data={vFin} h={250} wName={100} /></CardContent></Card>
             </div>
           </TabsContent>
 
           {/* ========== FIDELIZACION ========== */}
           <TabsContent value="fidelizacion" className="space-y-5 mt-5">
-            <Card className="border-dashed">
+            <Card className="border-dashed bg-white/60">
               <CardContent className="p-3 md:p-4">
                 <div className="flex items-center gap-2 mb-3"><Filter className="h-4 w-4 text-muted-foreground" /><span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtros</span></div>
                 <div className="flex flex-wrap gap-3">
-                  <FiltSel label="Mes" value={fMesF} onChange={setFMesF} opts={fo.mesesFid.map((m) => ({ value: m, label: fmtM(m) }))} />
+                  <DateFilter mode={fModoF} setMode={setFModoF} ano={fAnoF} setAno={setFAnoF} mes={fMesF} setMes={setFMesF} desde={fDesdeF} setDesde={setFDesdeF} hasta={fHastaF} setHasta={setFHastaF} anosOpts={fo.anosFid.map((a) => ({ value: String(a), label: String(a) }))} mesesOpts={fo.mesesFid.map((m) => ({ value: m, label: fmtM(m) }))} />
                   <FiltSel label="Estrategia" value={fEstrategia} onChange={setFEstrategia} opts={fo.estrategias.map((e) => ({ value: e, label: e.replace(/_/g, " ") }))} />
                   <FiltSel label="Asesora" value={fAsesora} onChange={setFAsesora} opts={fo.asesoras.filter((a) => a !== "SI" && a !== "NO").map((a) => ({ value: a, label: a }))} />
                   <FiltSel label="Segmento" value={fSegmento} onChange={setFSegmento} opts={fo.segmentos.filter((s) => s).map((s) => ({ value: s, label: s }))} />
@@ -409,12 +476,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Embudo */}
-            <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Embudo de Conversión</CardTitle><CardDescription>Del contacto a la venta</CardDescription></CardHeader><CardContent>
+            <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Embudo de Conversión</CardTitle><CardDescription>Del contacto a la venta</CardDescription></CardHeader><CardContent>
               <div className="space-y-3 max-w-2xl mx-auto">
                 {funnel.map((s, i) => { const p = fK.t > 0 ? (s.value / fK.t) * 100 : 0; return (
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between text-sm"><span className="font-medium">{s.stage}</span><span className="text-muted-foreground">{num(s.value)} ({pct(p)})</span></div>
-                    <div className="h-8 rounded-md bg-gray-100 overflow-hidden relative">
+                    <div className="h-8 rounded-md bg-gray-100/60 overflow-hidden relative">
                       <div className="h-full rounded-md transition-all duration-700" style={{ width: Math.max(p, 2) + "%", backgroundColor: s.color }} />
                       <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-sm">{pct(p)}</span>
                     </div>
@@ -425,7 +492,7 @@ export default function DashboardPage() {
 
             {/* Fid por Mes + Tipificación */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Fidelización por Mes</CardTitle></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Fidelización por Mes</CardTitle></CardHeader><CardContent>
                 <ChartContainer config={fidMCfg} className="h-[280px] w-full">
                   <BarChart data={fMes} margin={{ left: 0, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -436,15 +503,15 @@ export default function DashboardPage() {
                   </BarChart>
                 </ChartContainer>
               </CardContent></Card>
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Tipificación de Contacto</CardTitle></CardHeader><CardContent><Donut data={fTipi} /></CardContent></Card>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Tipificación de Contacto</CardTitle></CardHeader><CardContent><Donut data={fTipi} /></CardContent></Card>
             </div>
 
             {/* Motivos No Aceptación + Canal */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Motivos de No Aceptación</CardTitle><CardDescription>Principales razones de pérdida</CardDescription></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Motivos de No Aceptación</CardTitle><CardDescription>Principales razones de pérdida</CardDescription></CardHeader><CardContent>
                 <HBar data={fNoA} h={300} wName={130} />
               </CardContent></Card>
-              <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Canal de Contacto</CardTitle></CardHeader><CardContent>
+              <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Canal de Contacto</CardTitle></CardHeader><CardContent>
                 <ChartContainer config={barCfg} className="h-[300px] w-full">
                   <PieChart>
                     <Pie data={fCanal} cx="50%" cy="50%" outerRadius={95} dataKey="value" label={({ name, percent }) => name + " " + (percent * 100).toFixed(0) + "%"} labelLine={false}>
@@ -457,7 +524,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Canales Detallados */}
-            <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Detalle de Canales por Mes</CardTitle><CardDescription>Desglose LucIA vs WeCall vs WhatsApp</CardDescription></CardHeader><CardContent>
+            <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Detalle de Canales por Mes</CardTitle><CardDescription>Desglose LucIA vs WeCall vs WhatsApp</CardDescription></CardHeader><CardContent>
               <ChartContainer config={chDetCfg} className="h-[300px] w-full">
                 <BarChart data={fChDet} margin={{ left: 0, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -472,7 +539,7 @@ export default function DashboardPage() {
             </CardContent></Card>
 
             {/* Tabla Estrategia */}
-            <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Rendimiento por Estrategia</CardTitle><CardDescription>Ventas, prima y comisiones generadas</CardDescription></CardHeader><CardContent>
+            <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Rendimiento por Estrategia</CardTitle><CardDescription>Ventas, prima y comisiones generadas</CardDescription></CardHeader><CardContent>
               <div className="overflow-x-auto"><table className="w-full text-xs">
                 <thead><tr className="border-b text-left text-muted-foreground"><th className="pb-2 pr-4">Estrategia</th><th className="pb-2 pr-4 text-right">Contactos</th><th className="pb-2 pr-4 text-right">Ventas</th><th className="pb-2 pr-4 text-right">Tasa</th><th className="pb-2 pr-4 text-right">Prima</th><th className="pb-2 text-right">Comisiones</th></tr></thead>
                 <tbody>{fEstr.map((e) => (<tr key={e.name} className="border-b hover:bg-muted/50"><td className="py-2 pr-4 font-medium">{e.name}</td><td className="py-2 pr-4 text-right">{num(e.total)}</td><td className="py-2 pr-4 text-right">{num(e.ventas)}</td><td className="py-2 pr-4 text-right">{pct(e.total > 0 ? (e.ventas / e.total) * 100 : 0)}</td><td className="py-2 pr-4 text-right">{cop(e.prima)}</td><td className="py-2 text-right">{cop(e.comT)}</td></tr>))}</tbody>
@@ -480,7 +547,7 @@ export default function DashboardPage() {
             </CardContent></Card>
 
             {/* Tabla Asesoras */}
-            <Card><CardHeader className="pb-1"><CardTitle className="text-sm">Rendimiento por Asesora</CardTitle><CardDescription>Detalle con tasa de conversión, prima y actividad</CardDescription></CardHeader><CardContent>
+            <Card className="bg-white/70"><CardHeader className="pb-1"><CardTitle className="text-sm">Rendimiento por Asesora</CardTitle><CardDescription>Detalle con tasa de conversión, prima y actividad</CardDescription></CardHeader><CardContent>
               <div className="overflow-x-auto"><table className="w-full text-xs">
                 <thead><tr className="border-b text-left text-muted-foreground"><th className="pb-2 pr-4">Asesora</th><th className="pb-2 pr-4 text-right">Contactos</th><th className="pb-2 pr-4 text-right">Ventas</th><th className="pb-2 pr-4 text-right">Tasa</th><th className="pb-2 pr-4 text-right">Prima</th><th className="pb-2 pr-4 text-right">Llamadas</th><th className="pb-2 text-right">WhatsApp</th></tr></thead>
                 <tbody>{fAses.filter((a) => a.name !== "SI" && a.name !== "NO").map((a) => (<tr key={a.name} className="border-b hover:bg-muted/50"><td className="py-2 pr-4 font-medium">{a.name}</td><td className="py-2 pr-4 text-right">{num(a.total)}</td><td className="py-2 pr-4 text-right">{num(a.ventas)}</td><td className="py-2 pr-4 text-right">{pct(a.total > 0 ? (a.ventas / a.total) * 100 : 0)}</td><td className="py-2 pr-4 text-right">{cop(a.prima)}</td><td className="py-2 pr-4 text-right">{num(a.ll)}</td><td className="py-2 text-right">{num(a.wa)}</td></tr>))}</tbody>
